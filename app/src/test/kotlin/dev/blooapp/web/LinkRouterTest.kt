@@ -123,7 +123,15 @@ class LinkRouterTest {
 
     @Test
     fun `url without host stays in app`() {
+        // Uri.parse("https:///page") даёт host="" — это то же самое, что
+        // «хоста нет», и такую ссылку нельзя считать чужим домном.
         assertThat(route("https:///page"))
+            .isInstanceOf(LinkRouter.Decision.KeepInApp::class.java)
+    }
+
+    @Test
+    fun `relative url without scheme stays in app`() {
+        assertThat(route("/inner/page"))
             .isInstanceOf(LinkRouter.Decision.KeepInApp::class.java)
     }
 

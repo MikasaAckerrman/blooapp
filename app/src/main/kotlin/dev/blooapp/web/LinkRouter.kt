@@ -68,7 +68,10 @@ object LinkRouter {
         val uri = runCatching { Uri.parse(url) }.getOrNull()
             ?: return Decision.KeepInApp
         val scheme = uri.scheme?.lowercase()
-        val host = uri.host?.lowercase()?.removeSuffix(".")
+        // Пустая строка от Uri.parse значит «хоста нет» так же, как и null:
+        // `https:///page` даёт host="" — без этой нормализации такая ссылка
+        // уходила бы во внешний браузер как «чужой домен».
+        val host = uri.host?.lowercase()?.removeSuffix(".")?.takeIf { it.isNotEmpty() }
 
         if (scheme == null) return Decision.KeepInApp
 

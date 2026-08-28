@@ -45,7 +45,7 @@ class WebAppRepositoryTest {
         WebAppRepository(dao, now = { 1_000L }, diag = { events += it })
 
     @Test
-    fun `adding a plain url produces normalized app`() = runBlocking {
+    fun `adding a plain url produces normalized app`() : Unit = runBlocking {
         val dao = FakeDao()
         val r = repo(dao).add("  HTTPS://Example.COM/Path  ")
         assertThat(r).isInstanceOf(WebAppRepository.AddResult.Added::class.java)
@@ -57,7 +57,7 @@ class WebAppRepositoryTest {
     }
 
     @Test
-    fun `lan address is accepted and marked local — issue 48`() = runBlocking {
+    fun `lan address is accepted and marked local — issue 48`() : Unit = runBlocking {
         val dao = FakeDao()
         val r = repo(dao).add("nas:8080/library")
         val app = (r as WebAppRepository.AddResult.Added).app
@@ -66,7 +66,7 @@ class WebAppRepositoryTest {
     }
 
     @Test
-    fun `same origin different path is a duplicate`() = runBlocking {
+    fun `same origin different path is a duplicate`() : Unit = runBlocking {
         val dao = FakeDao()
         val rp = repo(dao)
         rp.add("https://mail.example.com/inbox")
@@ -76,7 +76,7 @@ class WebAppRepositoryTest {
     }
 
     @Test
-    fun `invalid url is rejected and reported to diagnostics`() = runBlocking {
+    fun `invalid url is rejected and reported to diagnostics`() : Unit = runBlocking {
         val dao = FakeDao()
         val events = mutableListOf<DiagEvent>()
         val r = repo(dao, events).add("javascript:alert(1)")
@@ -85,7 +85,7 @@ class WebAppRepositoryTest {
     }
 
     @Test
-    fun `sort order increments`() = runBlocking {
+    fun `sort order increments`() : Unit = runBlocking {
         val dao = FakeDao()
         val rp = repo(dao)
         rp.add("a.com"); rp.add("b.com"); rp.add("c.com")
@@ -95,7 +95,7 @@ class WebAppRepositoryTest {
     // --- инварианты идентичности --------------------------------------------
 
     @Test
-    fun `changing originKey is refused and reported`() = runBlocking {
+    fun `changing originKey is refused and reported`() : Unit = runBlocking {
         val dao = FakeDao()
         val events = mutableListOf<DiagEvent>()
         val rp = repo(dao, events)
@@ -108,7 +108,7 @@ class WebAppRepositoryTest {
     }
 
     @Test
-    fun `changing isolation mode is refused`() = runBlocking {
+    fun `changing isolation mode is refused`() : Unit = runBlocking {
         val dao = FakeDao()
         val events = mutableListOf<DiagEvent>()
         val rp = repo(dao, events)
@@ -120,7 +120,7 @@ class WebAppRepositoryTest {
     }
 
     @Test
-    fun `changing profile name of existing app is refused`() = runBlocking {
+    fun `changing profile name of existing app is refused`() : Unit = runBlocking {
         val dao = FakeDao()
         val events = mutableListOf<DiagEvent>()
         val rp = repo(dao, events)
@@ -134,7 +134,7 @@ class WebAppRepositoryTest {
     }
 
     @Test
-    fun `ordinary settings update succeeds`() = runBlocking {
+    fun `ordinary settings update succeeds`() : Unit = runBlocking {
         val dao = FakeDao()
         val rp = repo(dao)
         val app = (rp.add("https://a.com") as WebAppRepository.AddResult.Added).app
@@ -148,7 +148,7 @@ class WebAppRepositoryTest {
     // --- NA#212: смена стартового адреса без потери сессии ------------------
 
     @Test
-    fun `start url can change within the same origin — issue 212`() = runBlocking {
+    fun `start url can change within the same origin — issue 212`() : Unit = runBlocking {
         val dao = FakeDao()
         val rp = repo(dao)
         val app = (rp.add("https://mail.example.com/inbox") as WebAppRepository.AddResult.Added).app
@@ -162,7 +162,7 @@ class WebAppRepositoryTest {
     }
 
     @Test
-    fun `start url cannot jump to another origin`() = runBlocking {
+    fun `start url cannot jump to another origin`() : Unit = runBlocking {
         val dao = FakeDao()
         val rp = repo(dao)
         val app = (rp.add("https://a.com") as WebAppRepository.AddResult.Added).app
@@ -171,7 +171,7 @@ class WebAppRepositoryTest {
     }
 
     @Test
-    fun `delete removes only the target`() = runBlocking {
+    fun `delete removes only the target`() : Unit = runBlocking {
         val dao = FakeDao()
         val rp = repo(dao)
         val a = (rp.add("https://a.com") as WebAppRepository.AddResult.Added).app
