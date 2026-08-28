@@ -1,0 +1,106 @@
+name: build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Барьер: чистая логика (модель + диагностика) проверяется без Android SDK.
+  # Эти же тесты гоняются локально в песочнице командой `gradle test`,
+  # поэтому красный CI здесь означает реальную регрессию, а не разницу окружений.
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Тесты core-model и core-diag
+        run: ./gradlew :core-model:test :core-diag:test --stacktrace
+
+      - name: Сводка по тестам в GITHUB_STEP_SUMMARY
+        if: always()
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import glob, xml.etree.ElementTree as ET
+          rows, tot, fail = [], 0, 0
+          for p in glob.glob("*/build/test-results/test/*.xml"):
+              r = ET.parse(p).getroot()
+              n = int(r.get('tests', 0))
+              f = int(r.get('failures', 0)) + int(r.get('errors', 0))
+              rows.append((r.get('name'), n, f)); tot += n; fail += f
+          print("## Тесты\n")
+          print("| класс | тестов | провалов |")
+          print("|---|---:|---:|")
+          for name, n, f in sorted(rows):
+              print(f"| {name} | {n} | {f} |")
+          print(f"\n**Итого: {tot} тестов, {fail} провалов**")
+          PY
+
+      - name: Отчёты тестов артефактом
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: |
+            core-model/build/reports/tests/
+            core-diag/build/reports/tests/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # APK собирается только когда появится модуль :app (этап 1 плана).
+  # Пока его нет, шаг честно сообщает об этом, а не падает с невнятной ошибкой.
+  apk:
+    needs: unit-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Есть ли модуль :app
+        id: check
+        run: |
+          if [ -f app/build.gradle.kts ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "Модуль :app ещё не добавлен — сборка APK пропущена." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: assembleDebug
+        if: steps.check.outputs.present == 'true'
+        run: ./gradlew :app:assembleDebug --stacktrace
+
+      - name: Android-тесты на эмуляторе (Robolectric-независимые проверки)
+        if: steps.check.outputs.present == 'true'
+        run: ./gradlew :app:testDebugUnitTest --stacktrace
+
+      - name: APK артефактом
+        if: steps.check.outputs.present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: webapps-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 30

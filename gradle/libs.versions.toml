@@ -1,0 +1,52 @@
+[versions]
+# Версии сверены с maven.google.com / repo1.maven.org 28.08.2026.
+agp        = "8.13.2"
+kotlin     = "2.2.20"
+coreKtx    = "1.19.0"
+appcompat  = "1.7.1"
+material   = "1.13.0"
+webkit     = "1.17.0"
+room       = "2.8.4"
+work       = "2.11.2"
+browser    = "1.10.0"
+lifecycle  = "2.9.4"
+composeBom = "2026.08.00"
+activity   = "1.11.0"
+jsoup      = "1.23.2"
+junit      = "4.13.2"
+truth      = "1.4.5"
+turbine    = "1.2.1"
+robolectric = "4.16.1"
+espresso   = "3.7.0"
+uiautomator = "2.4.0"
+timber     = "5.0.1"
+leakcanary = "2.14"
+
+[libraries]
+androidx-core-ktx        = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+androidx-appcompat       = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
+androidx-webkit          = { group = "androidx.webkit", name = "webkit", version.ref = "webkit" }
+androidx-activity        = { group = "androidx.activity", name = "activity-ktx", version.ref = "activity" }
+androidx-browser         = { group = "androidx.browser", name = "browser", version.ref = "browser" }
+androidx-work            = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
+androidx-lifecycle       = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycle" }
+androidx-room-runtime    = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
+androidx-room-ktx        = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
+androidx-room-compiler   = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+material                 = { group = "com.google.android.material", name = "material", version.ref = "material" }
+jsoup                    = { group = "org.jsoup", name = "jsoup", version.ref = "jsoup" }
+timber                   = { group = "com.jakewharton.timber", name = "timber", version.ref = "timber" }
+
+junit                    = { group = "junit", name = "junit", version.ref = "junit" }
+truth                    = { group = "com.google.truth", name = "truth", version.ref = "truth" }
+turbine                  = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
+robolectric              = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
+espresso-core            = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espresso" }
+uiautomator              = { group = "androidx.test.uiautomator", name = "uiautomator", version.ref = "uiautomator" }
+leakcanary               = { group = "com.squareup.leakcanary", name = "leakcanary-android", version.ref = "leakcanary" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-android      = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-jvm          = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+ksp                 = { id = "com.google.devtools.ksp", version = "2.2.20-2.0.2" }
