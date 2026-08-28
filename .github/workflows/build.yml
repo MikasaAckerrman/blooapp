@@ -12,8 +12,8 @@ concurrency:
 
 jobs:
   # Барьер: чистая логика (модель + диагностика) проверяется без Android SDK.
-  # Эти же тесты гоняются локально в песочнице командой `gradle test`,
-  # поэтому красный CI здесь означает реальную регрессию, а не разницу окружений.
+  # Эти же тесты гоняются локально в среде разработки, поэтому красный CI здесь
+  # означает реальную регрессию, а не разницу окружений.
   unit-tests:
     runs-on: ubuntu-latest
     steps:
@@ -31,38 +31,18 @@ jobs:
       - name: Тесты core-model и core-diag
         run: ./gradlew :core-model:test :core-diag:test --stacktrace
 
-      - name: Сводка по тестам в GITHUB_STEP_SUMMARY
-        if: always()
-        run: |
-          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
-          import glob, xml.etree.ElementTree as ET
-          rows, tot, fail = [], 0, 0
-          for p in glob.glob("*/build/test-results/test/*.xml"):
-              r = ET.parse(p).getroot()
-              n = int(r.get('tests', 0))
-              f = int(r.get('failures', 0)) + int(r.get('errors', 0))
-              rows.append((r.get('name'), n, f)); tot += n; fail += f
-          print("## Тесты\n")
-          print("| класс | тестов | провалов |")
-          print("|---|---:|---:|")
-          for name, n, f in sorted(rows):
-              print(f"| {name} | {n} | {f} |")
-          print(f"\n**Итого: {tot} тестов, {fail} провалов**")
-          PY
-
       - name: Отчёты тестов артефактом
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-reports
+          name: core-test-reports
           path: |
             core-model/build/reports/tests/
             core-diag/build/reports/tests/
           if-no-files-found: ignore
           retention-days: 14
 
-  # APK собирается только когда появится модуль :app (этап 1 плана).
-  # Пока его нет, шаг честно сообщает об этом, а не падает с невнятной ошибкой.
+  # Android-часть: юнит-тесты модуля :app и debug-APK.
   apk:
     needs: unit-tests
     runs-on: ubuntu-latest
@@ -88,19 +68,60 @@ jobs:
             echo "Модуль :app ещё не добавлен — сборка APK пропущена." >> "$GITHUB_STEP_SUMMARY"
           fi
 
+      # Тесты :app идут ДО сборки APK: собирать неработающее бессмысленно.
+      - name: Юнит-тесты :app
+        if: steps.check.outputs.present == 'true'
+        run: ./gradlew :app:testDebugUnitTest --stacktrace
+
       - name: assembleDebug
         if: steps.check.outputs.present == 'true'
         run: ./gradlew :app:assembleDebug --stacktrace
 
-      - name: Android-тесты на эмуляторе (Robolectric-независимые проверки)
-        if: steps.check.outputs.present == 'true'
-        run: ./gradlew :app:testDebugUnitTest --stacktrace
+      - name: Сводка по всем тестам
+        if: always()
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import glob, xml.etree.ElementTree as ET
+          rows, tot, fail = [], 0, 0
+          patterns = [
+              "*/build/test-results/test/*.xml",
+              "*/build/test-results/testDebugUnitTest/*.xml",
+          ]
+          seen = set()
+          for pat in patterns:
+              for p in glob.glob(pat):
+                  if p in seen:
+                      continue
+                  seen.add(p)
+                  r = ET.parse(p).getroot()
+                  n = int(r.get('tests', 0))
+                  f = int(r.get('failures', 0)) + int(r.get('errors', 0))
+                  rows.append((r.get('name'), n, f)); tot += n; fail += f
+          print("## Тесты\n")
+          if not rows:
+              print("_нет результатов_")
+          else:
+              print("| класс | тестов | провалов |")
+              print("|---|---:|---:|")
+              for name, n, f in sorted(rows):
+                  print(f"| {name} | {n} | {f} |")
+              print(f"\n**Итого: {tot} тестов, {fail} провалов**")
+          PY
+
+      - name: Отчёты тестов :app артефактом
+        if: always() && steps.check.outputs.present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-test-reports
+          path: app/build/reports/tests/
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: APK артефактом
         if: steps.check.outputs.present == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: webapps-debug-apk
+          name: blooapp-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 30

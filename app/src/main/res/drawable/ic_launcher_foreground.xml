@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Заглушка иконки: рамка окна с «b». Заменится дизайном позже. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path
+        android:fillColor="#5AC8FA"
+        android:pathData="M30,30 L78,30 A4,4 0 0 1 82,34 L82,74 A4,4 0 0 1 78,78 L30,78 A4,4 0 0 1 26,74 L26,34 A4,4 0 0 1 30,30 Z" />
+    <path
+        android:fillColor="#1B2430"
+        android:pathData="M26,34 A4,4 0 0 1 30,30 L78,30 A4,4 0 0 1 82,34 L82,41 L26,41 Z" />
+    <path
+        android:fillColor="#1B2430"
+        android:pathData="M48,48 L48,70 L56,70 A8,8 0 0 0 56,54 L54,54 L54,48 Z" />
+</vector>

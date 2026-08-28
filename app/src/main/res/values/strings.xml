@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">blooapp</string>
+
+    <string name="action_add">Добавить</string>
+    <string name="action_cancel">Отмена</string>
+    <string name="action_ok">Понятно</string>
+    <string name="action_delete">Удалить</string>
+    <string name="action_reload">Перезагрузить</string>
+    <string name="action_close">Закрыть</string>
+    <string name="action_proceed_once">Продолжить один раз</string>
+    <string name="action_diagnostics">Диагностика</string>
+
+    <string name="add_title">Новое веб-приложение</string>
+    <string name="add_url_hint">example.com или http://192.168.1.10:8080</string>
+    <string name="empty_hint">Пока пусто. Нажмите «Добавить» и введите адрес сайта — он откроется как отдельное приложение.\n\nЛокальные адреса тоже работают: nas, 192.168.1.10:8080, localhost:3000.</string>
+
+    <string name="added">Добавлено: %1$s</string>
+    <string name="duplicate">Этот сайт уже добавлен: %1$s</string>
+    <string name="rejected">Не получилось: %1$s</string>
+
+    <string name="reason_empty">адрес пустой</string>
+    <string name="reason_scheme">поддерживаются только http и https</string>
+    <string name="reason_no_host">в адресе нет имени сайта</string>
+    <string name="reason_port">неверный порт</string>
+    <string name="reason_host_chars">недопустимые символы в имени сайта</string>
+
+    <string name="delete_confirm">Удалить это веб-приложение? Данные сайта (cookies, локальное хранилище) останутся на устройстве.</string>
+
+    <string name="webapp_missing">Веб-приложение не найдено</string>
+
+    <string name="render_gone_title">Страница упала</string>
+    <string name="render_gone_message">Процесс отображения страницы завершился. Приложение продолжает работать — можно перезагрузить страницу.</string>
+
+    <string name="ssl_error_title">Проблема с сертификатом</string>
+    <string name="ssl_error_message">Сертификат сайта %1$s не проверен. Для домашнего сервера это нормально, для публичного сайта — повод насторожиться.</string>
+
+    <string name="download_started">Скачивается: %1$s</string>
+    <string name="download_failed">Не удалось начать скачивание</string>
+    <string name="download_blob_unsupported">Этот файл создаётся самой страницей (blob) — такое скачивание появится в следующей версии</string>
+
+    <string name="no_handler_for_link">На устройстве нет приложения для этой ссылки</string>
+
+    <string name="storage_broken_title">База данных недоступна</string>
+    <string name="storage_broken_message">Не удалось открыть список веб-приложений. Приложение запущено с пустым списком, чтобы вы могли им пользоваться. Ваши данные не удалены.</string>
+
+    <string name="diagnostics_title">Окружение</string>
+</resources>

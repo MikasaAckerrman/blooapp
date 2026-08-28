@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Blooapp" parent="Theme.Material3.DayNight.NoActionBar">
+        <!--
+          Прозрачные системные панели: контент рисуется под ними, отступы
+          выставляются кодом через WindowInsets. На targetSdk 36 отказаться от
+          edge-to-edge нельзя, поэтому это не выбор, а требование.
+        -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>
