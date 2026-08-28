@@ -96,10 +96,10 @@ class WebAppRepository(
         isolation: IsolationMode = IsolationMode.PROFILE,
         groupId: Long? = null,
     ): AddResult.Added {
-        // Номер не переиспользуется после удаления: max + 1, а не count + 1.
-        // Иначе новый экземпляр унаследовал бы имя профиля удалённого и
-        // получил бы его старые cookies.
-        val index = dao.maxInstanceIndexOf(originKey) + 1
+        // Номер выдаёт монотонный счётчик, а не MAX по существующим записям:
+        // иначе после удаления окна номер освобождался бы, и новое окно
+        // унаследовало бы имя профиля удалённого вместе с его cookies.
+        val index = dao.nextInstanceIndex(originKey)
 
         val profileName = if (isolation == IsolationMode.SHARED) {
             null

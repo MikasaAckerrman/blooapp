@@ -18,6 +18,8 @@ class WebAppRepositoryTest {
 
     private class FakeDao : WebAppDao {
         val items = mutableListOf<WebApp>()
+        /** Монотонные счётчики: имитируют таблицу origin_counters. */
+        val counters = mutableMapOf<String, Int>()
         private var nextId = 1L
 
         override fun observeAll(): Flow<List<WebApp>> = flowOf(items.toList())
@@ -33,6 +35,10 @@ class WebAppRepositoryTest {
             items.count { it.originKey == originKey }
         override suspend fun maxInstanceIndexOf(originKey: String): Int =
             items.filter { it.originKey == originKey }.maxOfOrNull { it.instanceIndex } ?: 0
+        override suspend fun counterOf(originKey: String): Int? = counters[originKey]
+        override suspend fun putCounter(counter: OriginCounter) {
+            counters[counter.originKey] = counter.lastIndex
+        }
         override suspend fun getByProfile(profileName: String): WebApp? =
             items.find { it.profileName == profileName }
         override suspend fun allProfileNames(): List<String> = items.mapNotNull { it.profileName }
@@ -110,7 +116,7 @@ class WebAppRepositoryTest {
         // его старые cookies — то есть чужую сессию.
         val dao = FakeDao()
         val rp = repo(dao)
-        val a = forceAdd(rp, "https://a.com")
+        forceAdd(rp, "https://a.com")
         val b = forceAdd(rp, "https://a.com")
         assertThat(b.instanceIndex).isEqualTo(2)
 
@@ -118,6 +124,22 @@ class WebAppRepositoryTest {
         val c = forceAdd(rp, "https://a.com")
         assertThat(c.instanceIndex).isEqualTo(3)
         assertThat(c.profileName).isNotEqualTo(b.profileName)
+    }
+
+    @Test
+    fun `counter survives deletion of all instances`(): Unit = runBlocking {
+        // Удалили все окна сайта и добавили заново — номер продолжает расти,
+        // потому что старый профиль мог остаться на диске.
+        val dao = FakeDao()
+        val rp = repo(dao)
+        val a = forceAdd(rp, "https://a.com")
+        val b = forceAdd(rp, "https://a.com")
+        rp.delete(a)
+        rp.delete(b)
+        assertThat(dao.items).isEmpty()
+
+        val c = forceAdd(rp, "https://a.com")
+        assertThat(c.instanceIndex).isEqualTo(3)
     }
 
     @Test

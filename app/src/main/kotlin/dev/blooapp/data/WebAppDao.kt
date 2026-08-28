@@ -3,7 +3,9 @@ package dev.blooapp.data
 import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
@@ -39,13 +41,39 @@ interface WebAppDao {
     suspend fun countInstancesOf(originKey: String): Int
 
     /**
-     * Максимальный использованный номер экземпляра. Новый экземпляр получает
-     * max + 1, и номера НЕ переиспользуются после удаления — так же, как
-     * WebView не переиспользует номера каталогов профилей. Иначе удалённый и
-     * заново созданный экземпляр мог бы унаследовать чужой ярлык.
+     * Максимальный номер экземпляра СРЕДИ СУЩЕСТВУЮЩИХ окон.
+     *
+     * Осторожно: для выдачи нового номера этот метод НЕ подходит — после
+     * удаления окна его номер здесь освобождается, и новое окно унаследовало
+     * бы имя профиля удалённого вместе с его cookies. Для выдачи номеров есть
+     * [nextInstanceIndex], опирающийся на монотонный счётчик.
      */
     @Query("SELECT COALESCE(MAX(instance_index), 0) FROM web_apps WHERE origin_key = :originKey")
     suspend fun maxInstanceIndexOf(originKey: String): Int
+
+    /** Текущее значение монотонного счётчика номеров для сайта. */
+    @Query("SELECT last_index FROM origin_counters WHERE origin_key = :originKey")
+    suspend fun counterOf(originKey: String): Int?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun putCounter(counter: OriginCounter)
+
+    /**
+     * Выдать следующий номер экземпляра и запомнить его.
+     *
+     * Транзакция: между чтением и записью не должно вклиниться другое
+     * добавление, иначе два окна получат один номер и один профиль.
+     */
+    @Transaction
+    suspend fun nextInstanceIndex(originKey: String): Int {
+        // Счётчик может отсутствовать: база из версии 1 или сайт добавляется
+        // впервые. Тогда отталкиваемся от существующих окон, чтобы не выдать
+        // номер, который уже занят.
+        val current = counterOf(originKey) ?: maxInstanceIndexOf(originKey)
+        val next = current + 1
+        putCounter(OriginCounter(originKey, next))
+        return next
+    }
 
     @Query("SELECT * FROM web_apps WHERE profile_name = :profileName LIMIT 1")
     suspend fun getByProfile(profileName: String): WebApp?

@@ -21,7 +21,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * молчаливое уничтожение данных пользователя.
  */
 @Database(
-    entities = [WebApp::class, Group::class],
+    entities = [WebApp::class, Group::class, OriginCounter::class],
     version = 2,
     exportSchema = true,
 )
@@ -64,6 +64,19 @@ abstract class BlooDatabase : RoomDatabase() {
                     """.trimIndent()
                 )
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_groups_sort_order` ON `groups` (`sort_order`)")
+
+                // 1b. Монотонные счётчики номеров экземпляров.
+                //     Отдельная таблица, потому что номер не должен
+                //     освобождаться при удалении окна: иначе новое окно
+                //     получит профиль удалённого вместе с его cookies.
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `origin_counters` (
+                        `origin_key` TEXT PRIMARY KEY NOT NULL,
+                        `last_index` INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
 
                 // 2. Новая таблица окон — без уникальности origin_key,
                 //    с номером экземпляра, меткой и группой.
@@ -135,6 +148,15 @@ abstract class BlooDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_web_apps_origin_key` ON `web_apps` (`origin_key`)")
                 db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_web_apps_profile_name` ON `web_apps` (`profile_name`)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_web_apps_group_id` ON `web_apps` (`group_id`)")
+
+                // 5. Инициализация счётчиков по уже существующим окнам: все
+                //    они получили instance_index = 1, значит счётчик = 1.
+                db.execSQL(
+                    """
+                    INSERT OR REPLACE INTO `origin_counters` (origin_key, last_index)
+                    SELECT origin_key, MAX(instance_index) FROM `web_apps` GROUP BY origin_key
+                    """.trimIndent()
+                )
             }
         }
 
