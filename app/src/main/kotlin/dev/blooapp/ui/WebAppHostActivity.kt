@@ -29,6 +29,7 @@ import dev.blooapp.R
 import dev.blooapp.data.WebApp
 import dev.blooapp.diag.DiagBootstrap
 import dev.blooapp.web.LinkRouter
+import dev.blooapp.web.SessionIsolator
 import dev.blooapp.web.WebViewConfigurator
 import dev.webapps.diag.Code
 import dev.webapps.diag.DiagEvent
@@ -81,6 +82,9 @@ class WebAppHostActivity : AppCompatActivity() {
     private var webApp: WebApp? = null
     private var customView: View? = null
     private var customViewCallback: WebChromeClient.CustomViewCallback? = null
+
+    /** Чем закончилась попытка изолировать сессию — показываем пользователю. */
+    private var isolationState: SessionIsolator.Attached? = null
 
     /** Незавершённый файловый выбор. */
     private var fileCallback: ValueCallback<Array<Uri>>? = null
@@ -165,7 +169,7 @@ class WebAppHostActivity : AppCompatActivity() {
                 return@launch
             }
             webApp = app
-            title = app.title
+            title = app.displayName
             bind(app, savedInstanceState)
         }
     }
@@ -221,6 +225,15 @@ class WebAppHostActivity : AppCompatActivity() {
     }
 
     private fun bind(app: WebApp, savedInstanceState: Bundle?) {
+        // ПОРЯДОК КРИТИЧЕН и зафиксирован документацией androidx.webkit:
+        // setProfile можно вызвать только до навигации, до evaluateJavascript,
+        // до getProfile и только один раз. Любая перестановка = краш.
+        //   1) прикрепить профиль (изоляция сессии)
+        //   2) применить настройки
+        //   3) loadUrl
+        val attached = SessionIsolator.attach(webView, app, DiagBootstrap::emit)
+        isolationState = attached
+
         WebViewConfigurator.configure(webView, app, DiagBootstrap::emit)
 
         if (app.keepScreenOn) {

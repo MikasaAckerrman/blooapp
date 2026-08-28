@@ -22,16 +22,17 @@ import dev.blooapp.R
 import dev.blooapp.data.WebApp
 import dev.blooapp.data.WebAppRepository
 import dev.blooapp.diag.DiagBootstrap
+import dev.blooapp.web.SessionIsolator
 import dev.webapps.model.UrlNormalizer
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 /**
- * Менеджер: список веб-приложений и добавление нового.
+ * Менеджер: список окон и добавление новых.
  *
- * На этом этапе UI намеренно минимальный — задача этапа 1 в том, чтобы
- * вертикальный срез «ввёл адрес → открылось окно» работал и был проверяем на
- * устройстве. Compose и группы придут на этапах 4–5 по плану.
+ * UI пока минимальный — сетка 4×N, группы и тема идут отдельными этапами.
+ * Задача этого экрана сейчас: дать возможность создать несколько окон одного
+ * сайта и убедиться, что их сессии независимы.
  */
 class ManagerActivity : AppCompatActivity() {
 
@@ -65,7 +66,7 @@ class ManagerActivity : AppCompatActivity() {
         empty = findViewById(R.id.empty_hint)
         adapter = Adapter(
             onOpen = { app -> startActivity(WebAppHostActivity.intentFor(this, app.id)) },
-            onLongPress = { app -> confirmDelete(app) },
+            onLongPress = { app -> showItemMenu(app) },
         )
         list.layoutManager = LinearLayoutManager(this)
         list.adapter = adapter
@@ -105,19 +106,9 @@ class ManagerActivity : AppCompatActivity() {
     private fun add(raw: String) {
         lifecycleScope.launch {
             when (val result = repo.add(raw)) {
-                is WebAppRepository.AddResult.Added ->
-                    Toast.makeText(
-                        this@ManagerActivity,
-                        getString(R.string.added, result.app.title),
-                        Toast.LENGTH_SHORT,
-                    ).show()
+                is WebAppRepository.AddResult.Added -> announceAdded(result)
 
-                is WebAppRepository.AddResult.Duplicate ->
-                    Toast.makeText(
-                        this@ManagerActivity,
-                        getString(R.string.duplicate, result.existing.title),
-                        Toast.LENGTH_LONG,
-                    ).show()
+                is WebAppRepository.AddResult.NeedsConfirmation -> confirmSecondInstance(result)
 
                 is WebAppRepository.AddResult.Rejected ->
                     Toast.makeText(
@@ -127,6 +118,39 @@ class ManagerActivity : AppCompatActivity() {
                     ).show()
             }
         }
+    }
+
+    /**
+     * Сайт уже есть — но это не отказ. Второе окно того же сайта с отдельной
+     * сессией и есть главная функция приложения, поэтому спрашиваем, а не
+     * запрещаем.
+     */
+    private fun confirmSecondInstance(r: WebAppRepository.AddResult.NeedsConfirmation) {
+        val count = r.existing.size
+        val names = r.existing.joinToString("\n") { "  • ${it.displayName}" }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.another_window_title)
+            .setMessage(getString(R.string.another_window_message, count, names))
+            .setPositiveButton(R.string.action_create_window) { _, _ ->
+                lifecycleScope.launch {
+                    val parsed = UrlNormalizer.normalize(r.normalizedUrl)
+                    if (parsed is UrlNormalizer.Result.Valid) {
+                        val added = repo.addInstance(parsed.url, r.originKey)
+                        announceAdded(added)
+                    }
+                }
+            }
+            .setNegativeButton(R.string.action_cancel, null)
+            .show()
+    }
+
+    private fun announceAdded(r: WebAppRepository.AddResult.Added) {
+        val text = if (r.instanceNumber > 1) {
+            getString(R.string.added_instance, r.app.displayName, r.instanceNumber)
+        } else {
+            getString(R.string.added, r.app.displayName)
+        }
+        Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
     }
 
     private fun describe(reason: UrlNormalizer.Reason): String = getString(
@@ -139,26 +163,106 @@ class ManagerActivity : AppCompatActivity() {
         }
     )
 
-    private fun confirmDelete(app: WebApp) {
+    private fun showItemMenu(app: WebApp) {
+        val items = arrayOf(
+            getString(R.string.action_rename),
+            getString(R.string.action_clear_session),
+            getString(R.string.action_delete),
+        )
         AlertDialog.Builder(this)
-            .setTitle(app.title)
-            .setMessage(R.string.delete_confirm)
-            .setPositiveButton(R.string.action_delete) { _, _ ->
-                lifecycleScope.launch { repo.delete(app) }
+            .setTitle(app.displayName)
+            .setItems(items) { _, which ->
+                when (which) {
+                    0 -> showRenameDialog(app)
+                    1 -> confirmClearSession(app)
+                    2 -> confirmDelete(app)
+                }
+            }
+            .show()
+    }
+
+    private fun showRenameDialog(app: WebApp) {
+        val input = EditText(this).apply {
+            setText(app.instanceLabel ?: "")
+            hint = getString(R.string.rename_hint)
+            setSingleLine()
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.action_rename)
+            .setView(input)
+            .setPositiveButton(R.string.action_ok) { _, _ ->
+                lifecycleScope.launch { repo.rename(app.id, input.text.toString()) }
             }
             .setNegativeButton(R.string.action_cancel, null)
             .show()
     }
 
     /**
-     * Экран диагностики. Показывает ровно те три факта, от которых зависит
-     * доступность изоляции сессий, — их бессмысленно угадывать заранее,
-     * потому что MULTI_PROFILE требует и поддержки в WebView APK, и
-     * включённого многопроцессного режима.
+     * Очистка сессии окна — то, чего нет в аналоге: там висит открытый вопрос
+     * «как удалить cookies одного сайта», и автор ответить не смог.
+     */
+    private fun confirmClearSession(app: WebApp) {
+        if (!app.hasOwnSession) {
+            Toast.makeText(this, R.string.session_shared_notice, Toast.LENGTH_LONG).show()
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.action_clear_session)
+            .setMessage(getString(R.string.clear_session_message, app.displayName))
+            .setPositiveButton(R.string.action_clear) { _, _ ->
+                val ok = SessionIsolator.wipe(app.profileName!!, DiagBootstrap::emit)
+                Toast.makeText(
+                    this,
+                    if (ok) R.string.session_cleared else R.string.session_clear_failed,
+                    Toast.LENGTH_SHORT,
+                ).show()
+            }
+            .setNegativeButton(R.string.action_cancel, null)
+            .show()
+    }
+
+    private fun confirmDelete(app: WebApp) {
+        AlertDialog.Builder(this)
+            .setTitle(app.displayName)
+            .setMessage(R.string.delete_confirm)
+            .setPositiveButton(R.string.action_delete) { _, _ ->
+                lifecycleScope.launch {
+                    // Сначала стираем данные профиля, потом запись: иначе
+                    // осиротевший профиль остался бы на диске навсегда.
+                    app.profileName?.let { SessionIsolator.wipe(it, DiagBootstrap::emit) }
+                    repo.delete(app)
+                }
+            }
+            .setNegativeButton(R.string.action_cancel, null)
+            .show()
+    }
+
+    /**
+     * Экран диагностики. Показывает факты, от которых зависит доступность
+     * изоляции сессий, — их бессмысленно угадывать заранее, потому что
+     * MULTI_PROFILE требует и поддержки в WebView APK, и включённого
+     * многопроцессного режима.
      */
     private fun showDiagnostics() {
         val env = DiagBootstrap.environmentEvent(this)
-        val text = env.fields.entries.joinToString("\n") { (k, v) -> "$k = $v" }
+        val profiles = SessionIsolator.knownProfiles()
+        val text = buildString {
+            env.fields.forEach { (k, v) -> append("$k = $v\n") }
+            append("\nизоляция: ")
+            append(
+                when (SessionIsolator.availability()) {
+                    SessionIsolator.Unavailable.NONE -> "доступна"
+                    SessionIsolator.Unavailable.WEBVIEW_TOO_OLD -> "нет — старый WebView"
+                    SessionIsolator.Unavailable.MULTIPROCESS_DISABLED ->
+                        "нет — выключен многопроцессный режим WebView"
+                }
+            )
+            append("\nпрофилей в WebView: ${profiles.size}")
+            if (profiles.isNotEmpty()) {
+                append("\n")
+                profiles.take(12).forEach { append("  • $it\n") }
+            }
+        }
         AlertDialog.Builder(this)
             .setTitle(R.string.diagnostics_title)
             .setMessage(text)
@@ -186,8 +290,14 @@ class ManagerActivity : AppCompatActivity() {
 
         override fun onBindViewHolder(holder: Holder, position: Int) {
             val app = items[position]
-            holder.title.text = app.title
-            holder.url.text = app.baseUrl
+            holder.title.text = app.displayName
+            // Показываем и адрес, и состояние сессии: без этого невозможно
+            // понять, изолировано ли окно, а это главный вопрос пользователя.
+            holder.url.text = if (app.hasOwnSession) {
+                "${app.baseUrl}  •  сессия #${app.instanceIndex}"
+            } else {
+                "${app.baseUrl}  •  общая сессия"
+            }
             holder.itemView.setOnClickListener { onOpen(app) }
             holder.itemView.setOnLongClickListener { onLongPress(app); true }
         }

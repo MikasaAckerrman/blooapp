@@ -4,6 +4,7 @@ import android.app.Application
 import android.util.Log
 import androidx.room.Room
 import dev.blooapp.data.BlooDatabase
+import dev.blooapp.data.GroupRepository
 import dev.blooapp.data.WebAppRepository
 import dev.blooapp.diag.DiagBootstrap
 import dev.webapps.diag.Code
@@ -16,6 +17,9 @@ class BlooApp : Application() {
         private set
 
     lateinit var repository: WebAppRepository
+        private set
+
+    lateinit var groups: GroupRepository
         private set
 
     /**
@@ -62,12 +66,18 @@ class BlooApp : Application() {
             dao = database.webApps(),
             diag = DiagBootstrap::emit,
         )
+        groups = GroupRepository(
+            dao = database.groups(),
+            webApps = database.webApps(),
+        )
     }
 
     private fun openDatabase(): BlooDatabase = try {
         Room.databaseBuilder(this, BlooDatabase::class.java, BlooDatabase.NAME)
-            // Никакого fallbackToDestructiveMigration: это молчаливое
-            // уничтожение данных пользователя.
+            // Миграции перечислены явно. fallbackToDestructiveMigration НЕ
+            // используется нигде и никогда: это молчаливое уничтожение данных
+            // пользователя вместе с его сессиями.
+            .addMigrations(*BlooDatabase.ALL_MIGRATIONS)
             .build()
     } catch (e: Throwable) {
         storageBroken = true

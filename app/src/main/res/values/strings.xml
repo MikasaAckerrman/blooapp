@@ -13,11 +13,24 @@
 
     <string name="add_title">Новое веб-приложение</string>
     <string name="add_url_hint">example.com или http://192.168.1.10:8080</string>
-    <string name="empty_hint">Пока пусто. Нажмите «Добавить» и введите адрес сайта — он откроется как отдельное приложение.\n\nЛокальные адреса тоже работают: nas, 192.168.1.10:8080, localhost:3000.</string>
+    <string name="empty_hint">Пока пусто. Нажмите «Добавить» и введите адрес сайта — он откроется как отдельное приложение.\n\nЛокальные адреса тоже работают: nas, 192.168.1.10:8080, localhost:3000.\n\nОдин и тот же сайт можно добавить дважды — получите два независимых аккаунта, работающих одновременно.</string>
 
     <string name="added">Добавлено: %1$s</string>
-    <string name="duplicate">Этот сайт уже добавлен: %1$s</string>
+    <string name="added_instance">Добавлено: %1$s — окно №%2$d со своей сессией</string>
     <string name="rejected">Не получилось: %1$s</string>
+
+    <string name="another_window_title">Ещё одно окно этого сайта?</string>
+    <string name="another_window_message">Окон этого сайта уже %1$d:\n%2$s\n\nНовое окно получит отдельную сессию — можно войти под другим аккаунтом, оба будут работать одновременно.</string>
+    <string name="action_create_window">Создать окно</string>
+
+    <string name="action_rename">Переименовать</string>
+    <string name="rename_hint">Например: Рабочий</string>
+    <string name="action_clear_session">Очистить сессию</string>
+    <string name="action_clear">Очистить</string>
+    <string name="clear_session_message">Выйти из всех аккаунтов в «%1$s» и удалить его cookies? Другие окна этого сайта не затронуты.</string>
+    <string name="session_cleared">Сессия очищена</string>
+    <string name="session_clear_failed">Не удалось очистить сессию</string>
+    <string name="session_shared_notice">У этого окна общая сессия — очищать нечего</string>
 
     <string name="reason_empty">адрес пустой</string>
     <string name="reason_scheme">поддерживаются только http и https</string>
@@ -25,7 +38,9 @@
     <string name="reason_port">неверный порт</string>
     <string name="reason_host_chars">недопустимые символы в имени сайта</string>
 
-    <string name="delete_confirm">Удалить это веб-приложение? Данные сайта (cookies, локальное хранилище) останутся на устройстве.</string>
+    <string name="delete_confirm">Удалить это окно? Его сессия (cookies, локальные данные) будет стёрта. Другие окна этого сайта не затронуты.</string>
+
+    <string name="empty_hint_extra">Совет: добавьте один и тот же сайт дважды — получите два независимых аккаунта, работающих одновременно.</string>
 
     <string name="webapp_missing">Веб-приложение не найдено</string>
 
