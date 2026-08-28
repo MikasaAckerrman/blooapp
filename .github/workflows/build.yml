@@ -58,6 +58,9 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Совместимость AAR-зависимостей с compileSdk и AGP
+        run: python3 tools/check_aar_compat.py
+
       - name: Есть ли модуль :app
         id: check
         run: |

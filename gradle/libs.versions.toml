@@ -1,8 +1,14 @@
 [versions]
 # Версии сверены с maven.google.com / repo1.maven.org 28.08.2026.
+# ВАЖНО про выбор версий: «самая свежая» != «подходящая». У androidx-библиотек
+# внутри AAR лежит aar-metadata.properties с minCompileSdk и
+# minAndroidGradlePluginVersion, и сборка падает на checkDebugAarMetadata, если
+# они выше наших. Так случилось с androidx.core 1.19.0: он требует compileSdk 37
+# и AGP 9.1. Перед подъёмом версий прогонять tools/check_aar_compat.py.
 agp        = "8.13.2"
 kotlin     = "2.2.20"
-coreKtx    = "1.19.0"
+# 1.18.0 — последняя, совместимая с compileSdk 36 (1.19.0 требует 37).
+coreKtx    = "1.18.0"
 appcompat  = "1.7.1"
 material   = "1.13.0"
 recyclerview = "1.4.0"
