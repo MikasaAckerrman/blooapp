@@ -79,6 +79,10 @@ class WebAppHostActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private lateinit var fullscreenContainer: FrameLayout
 
+    /** Контейнер для окна-popup (вход через соцсети) — внутри приложения. */
+    private lateinit var popupContainer: FrameLayout
+    private var popupView: WebView? = null
+
     private var webApp: WebApp? = null
     private var customView: View? = null
     private var customViewCallback: WebChromeClient.CustomViewCallback? = null
@@ -137,8 +141,19 @@ class WebAppHostActivity : AppCompatActivity() {
             visibility = View.GONE
             setBackgroundColor(0xFF000000.toInt())
         }
+        popupContainer = FrameLayout(this).apply {
+            visibility = View.GONE
+            setBackgroundColor(0xFF101014.toInt())
+        }
         root.addView(
             webView,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ),
+        )
+        root.addView(
+            popupContainer,
             FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -216,6 +231,7 @@ class WebAppHostActivity : AppCompatActivity() {
                 override fun handleOnBackPressed() {
                     when {
                         customView != null -> hideCustomView()
+                        popupView != null -> closePopup()
                         webView.canGoBack() -> webView.goBack()
                         else -> finish()
                     }
@@ -305,12 +321,92 @@ class WebAppHostActivity : AppCompatActivity() {
         // остаётся с залипшим полем.
         fileCallback?.onReceiveValue(null)
         fileCallback = null
+        closePopup()
         runCatching {
             (webView.parent as? ViewGroup)?.removeView(webView)
             webView.destroy()
         }
         DiagBootstrap.flushAsync()
         super.onDestroy()
+    }
+
+    // ------------------------------------------------------------ внешний вход
+
+    /**
+     * Вход через Google требует системного браузера — но там свои cookies.
+     * Объясняем это прямо, вместо того чтобы молча увести пользователя в
+     * браузер, где он уже залогинен под другим аккаунтом.
+     */
+    private fun askExternalLoginConsent(url: String) {
+        val app = webApp ?: return
+        DiagBootstrap.emit(
+            DiagEvent(
+                System.currentTimeMillis(), Severity.WARN, Code.OAUTH_HOST_DELEGATED_TO_CUSTOM_TAB,
+                app.originKey,
+                "вход через Google требует внешнего браузера — спрашиваем согласие",
+                mapOf("url" to url),
+            )
+        )
+        AlertDialog.Builder(this)
+            .setTitle(R.string.external_login_title)
+            .setMessage(R.string.external_login_message)
+            .setPositiveButton(R.string.action_open_browser) { _, _ ->
+                ExternalLauncher.openCustomTab(this, url, app.originKey)
+            }
+            .setNeutralButton(R.string.action_always_open_browser) { _, _ ->
+                lifecycleScope.launch {
+                    (application as BlooApp).repository
+                        .update(app.copy(googleLoginOutside = true))
+                    webApp = app.copy(googleLoginOutside = true)
+                    ExternalLauncher.openCustomTab(this@WebAppHostActivity, url, app.originKey)
+                }
+            }
+            .setNegativeButton(R.string.action_cancel, null)
+            .show()
+    }
+
+    // --------------------------------------------------------------- popup
+
+    /**
+     * Окно-popup внутри приложения: используется для входа через соцсети
+     * (`window.open`, `target="_blank"`).
+     *
+     * Профиль НЕ устанавливается заново — новый WebView создаётся в том же
+     * процессе и том же WebView-провайдере, поэтому наследует профиль
+     * родителя. Попытка вызвать `setProfile` здесь была бы ошибкой: у
+     * WebView, созданного через WebViewTransport, движок уже привязал
+     * контекст.
+     */
+    private fun createPopupWebView(app: WebApp): WebView {
+        val popup = WebView(this)
+        WebViewConfigurator.configure(popup, app, DiagBootstrap::emit)
+        popup.webViewClient = HostWebViewClient(app)
+        popup.webChromeClient = HostChromeClient(app)
+        popup.setDownloadListener { url, ua, disposition, mime, size ->
+            onDownloadRequested(app, url, ua, disposition, mime, size)
+        }
+
+        popupContainer.removeAllViews()
+        popupContainer.addView(
+            popup,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ),
+        )
+        popupContainer.visibility = View.VISIBLE
+        popupView = popup
+        return popup
+    }
+
+    /** Закрыть popup: по `window.close()` или по кнопке «назад». */
+    private fun closePopup(which: WebView? = null) {
+        val popup = popupView ?: return
+        if (which != null && which !== popup) return
+        popupContainer.removeAllViews()
+        popupContainer.visibility = View.GONE
+        popupView = null
+        runCatching { popup.destroy() }
     }
 
     // ---------------------------------------------------------- fullscreen
@@ -386,6 +482,7 @@ class WebAppHostActivity : AppCompatActivity() {
                 url = url,
                 appOriginHost = Uri.parse(app.baseUrl).host?.lowercase().orEmpty(),
                 externalOutside = app.externalLinksOutside,
+                googleLoginOutside = app.googleLoginOutside,
                 isRedirect = request.isRedirect,
             )
             // Контракт из документации: НИКОГДА не звать loadUrl(request.url)
@@ -409,12 +506,20 @@ class WebAppHostActivity : AppCompatActivity() {
                             DiagEvent(
                                 System.currentTimeMillis(), Severity.TRACE,
                                 Code.OAUTH_HOST_DELEGATED_TO_CUSTOM_TAB, app.originKey,
-                                "OAuth-хост отдан в Custom Tab: WebView для него запрещён Google",
+                                "OAuth-хост отдан в системный браузер по согласию пользователя",
                                 mapOf("url" to decision.uri),
                             )
                         )
                     }
                     ExternalLauncher.openCustomTab(this@WebAppHostActivity, decision.uri, app.originKey)
+                    true
+                }
+
+                is LinkRouter.Decision.NeedsExternalLoginConsent -> {
+                    // Ключевой момент для изоляции: вход в системном браузере
+                    // положит сессию НЕ в профиль этого окна, и пользователь
+                    // окажется залогинен под аккаунтом браузера. Спрашиваем.
+                    askExternalLoginConsent(decision.uri)
                     true
                 }
 
@@ -542,8 +647,17 @@ class WebAppHostActivity : AppCompatActivity() {
 
         /**
          * Popup-окна. При `setSupportMultipleWindows(true)` без этого колбэка
-         * окно просто не откроется — и вход через соцсети сломается.
-         * Первый шаг: открываем в Custom Tab, что покрывает логины.
+         * окно не откроется, и вход через соцсети сломается.
+         *
+         * КРИТИЧНО для изоляции: новое окно создаётся ВНУТРИ приложения, на
+         * том же профиле. Раньше здесь открывался Custom Tab — то есть
+         * системный браузер с чужими cookies, и изоляция окна рушилась. Именно
+         * так пользователь оказывался залогинен там, куда не входил.
+         *
+         * Механика: WebView передаёт `resultMsg` с [WebView.WebViewTransport];
+         * мы обязаны положить туда новый WebView и отправить сообщение —
+         * тогда движок сам загрузит в него целевой URL. Профиль новый WebView
+         * наследует от родителя, потому что живёт в том же WebView-провайдере.
          */
         override fun onCreateWindow(
             view: WebView,
@@ -562,13 +676,33 @@ class WebAppHostActivity : AppCompatActivity() {
                 )
                 return false
             }
-            // URL появится в transport-WebView; проще и надёжнее отдать
-            // последний запрошенный адрес системе через Custom Tab.
-            val url = view.url
-            if (url != null) {
-                ExternalLauncher.openCustomTab(this@WebAppHostActivity, url, app.originKey)
+            val transport = resultMsg?.obj as? WebView.WebViewTransport ?: return false
+            return try {
+                val popup = createPopupWebView(app)
+                transport.webView = popup
+                resultMsg.sendToTarget()
+                DiagBootstrap.emit(
+                    DiagEvent(
+                        System.currentTimeMillis(), Severity.TRACE,
+                        Code.POPUP_SUPPRESSED_NO_MULTIWINDOW, app.originKey,
+                        "popup открыт внутри окна — сессия остаётся изолированной",
+                    )
+                )
+                true
+            } catch (e: Throwable) {
+                DiagBootstrap.emit(
+                    DiagEvent(
+                        System.currentTimeMillis(), Severity.ERROR,
+                        Code.POPUP_SUPPRESSED_NO_MULTIWINDOW, app.originKey,
+                        "не удалось открыть popup внутри: ${e.javaClass.simpleName}",
+                    )
+                )
+                false
             }
-            return false
+        }
+
+        override fun onCloseWindow(window: WebView) {
+            closePopup(window)
         }
 
         override fun onPermissionRequest(request: android.webkit.PermissionRequest) {

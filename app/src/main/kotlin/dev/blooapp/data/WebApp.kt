@@ -181,9 +181,32 @@ data class WebApp(
     @ColumnInfo(name = "keep_screen_on")
     val keepScreenOn: Boolean = false,
 
-    /** Открывать ссылки на чужие домены во внешнем браузере. */
+    /**
+     * Открывать ссылки на чужие домены во внешнем браузере.
+     *
+     * По умолчанию ВЫКЛЮЧЕНО, и это важное решение. Если включить, любая
+     * ссылка на другой домен уходит в Custom Tab — то есть в системный
+     * браузер пользователя, где у него СВОИ cookies и свои логины. Тогда
+     * изолированная сессия окна теряет смысл: пользователь оказывается
+     * залогинен там, куда он в этом окне не входил.
+     *
+     * Именно так и проявился дефект на первом APK: вход на сайте уводил в
+     * Firefox, где аккаунт уже был.
+     */
     @ColumnInfo(name = "external_links_outside")
-    val externalLinksOutside: Boolean = true,
+    val externalLinksOutside: Boolean = false,
+
+    /**
+     * Отдавать вход через Google в системный браузер.
+     *
+     * Google блокирует OAuth в embedded WebView (`disallowed_useragent`),
+     * поэтому иначе вход просто не работает. Но цена — сессия окажется в
+     * браузере, а не в профиле окна. Поэтому это осознанный выбор
+     * пользователя, а не молчаливое поведение: по умолчанию выключено, и при
+     * попытке входа окно объясняет ситуацию.
+     */
+    @ColumnInfo(name = "google_login_outside")
+    val googleLoginOutside: Boolean = false,
 
     @ColumnInfo(name = "created_at")
     val createdAt: Long = 0,

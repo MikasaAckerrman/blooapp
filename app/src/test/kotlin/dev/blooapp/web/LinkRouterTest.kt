@@ -8,19 +8,78 @@ import org.robolectric.RobolectricTestRunner
 /**
  * Тесты маршрутизации ссылок.
  *
- * Robolectric нужен только из-за `Uri.parse` — своей реализации разбора не
- * пишем, потому что расхождение с платформенной было бы источником именно тех
- * дефектов, которые мы ловим.
+ * Главный инвариант, добытый из реального дефекта: **ссылка по умолчанию
+ * остаётся внутри окна**. Открыть её в системном браузере — значит уйти в
+ * чужие cookies, и изолированная сессия окна перестаёт существовать.
  *
- * Каждый тест назван по дефекту, который предотвращает.
+ * Robolectric нужен только из-за `Uri.parse`: своя реализация разбора
+ * расходилась бы с платформенной, а это источник ровно тех дефектов, которые
+ * мы ловим.
  */
 @RunWith(RobolectricTestRunner::class)
 class LinkRouterTest {
 
     private val host = "example.com"
 
-    private fun route(url: String, external: Boolean = true, redirect: Boolean = false) =
-        LinkRouter.route(url, host, external, redirect)
+    private fun route(
+        url: String,
+        external: Boolean = false,
+        googleOutside: Boolean = false,
+        redirect: Boolean = false,
+    ) = LinkRouter.route(url, host, external, googleOutside, redirect)
+
+    // --- ГЛАВНОЕ: чужой домен по умолчанию остаётся внутри -------------------
+
+    @Test
+    fun `foreign domain stays in app by default`() {
+        // Уйти в Custom Tab значит уйти в браузер пользователя с его логинами.
+        // Изоляция окна этого не переживёт.
+        assertThat(route("https://other.org/page"))
+            .isInstanceOf(LinkRouter.Decision.KeepInApp::class.java)
+    }
+
+    @Test
+    fun `foreign domain goes outside only when explicitly enabled`() {
+        val d = route("https://other.org/page", external = true)
+        assertThat(d).isInstanceOf(LinkRouter.Decision.OpenInCustomTab::class.java)
+        assertThat((d as LinkRouter.Decision.OpenInCustomTab).reason)
+            .isEqualTo(LinkRouter.Reason.EXTERNAL_DOMAIN)
+    }
+
+    // --- OAuth: спрашиваем, а не уводим молча -------------------------------
+
+    @Test
+    fun `google login asks for consent by default`() {
+        val d = route("https://accounts.google.com/o/oauth2/auth?x=1")
+        assertThat(d).isInstanceOf(LinkRouter.Decision.NeedsExternalLoginConsent::class.java)
+    }
+
+    @Test
+    fun `google login goes to browser once user allowed it`() {
+        val d = route("https://accounts.google.com/o/oauth2/auth", googleOutside = true)
+        assertThat(d).isInstanceOf(LinkRouter.Decision.OpenInCustomTab::class.java)
+        assertThat((d as LinkRouter.Decision.OpenInCustomTab).reason)
+            .isEqualTo(LinkRouter.Reason.OAUTH)
+    }
+
+    @Test
+    fun `all known oauth hosts are recognised`() {
+        for (u in listOf(
+            "https://accounts.google.com/signin",
+            "https://oauth2.googleapis.com/token",
+            "https://signin.google.com/x",
+            "https://myaccount.google.com/y",
+        )) {
+            assertThat(route(u))
+                .isInstanceOf(LinkRouter.Decision.NeedsExternalLoginConsent::class.java)
+        }
+    }
+
+    @Test
+    fun `oauth decision wins over redirect flag`() {
+        assertThat(route("https://accounts.google.com/signin", redirect = true))
+            .isInstanceOf(LinkRouter.Decision.NeedsExternalLoginConsent::class.java)
+    }
 
     // --- своё/чужое ---------------------------------------------------------
 
@@ -32,28 +91,13 @@ class LinkRouterTest {
 
     @Test
     fun `subdomain stays in app`() {
-        // m.example.com — тот же сайт, выкидывать наружу нельзя.
         assertThat(route("https://m.example.com/page"))
             .isInstanceOf(LinkRouter.Decision.KeepInApp::class.java)
     }
 
     @Test
     fun `parent domain stays in app`() {
-        val d = LinkRouter.route("https://example.com/x", "www.example.com", true)
-        assertThat(d).isInstanceOf(LinkRouter.Decision.KeepInApp::class.java)
-    }
-
-    @Test
-    fun `external domain goes to custom tab when enabled`() {
-        val d = route("https://other.org/page")
-        assertThat(d).isInstanceOf(LinkRouter.Decision.OpenInCustomTab::class.java)
-        assertThat((d as LinkRouter.Decision.OpenInCustomTab).reason)
-            .isEqualTo(LinkRouter.Reason.EXTERNAL_DOMAIN)
-    }
-
-    @Test
-    fun `external domain stays in app when setting is off`() {
-        assertThat(route("https://other.org/page", external = false))
+        assertThat(LinkRouter.route("https://example.com/x", "www.example.com"))
             .isInstanceOf(LinkRouter.Decision.KeepInApp::class.java)
     }
 
@@ -61,34 +105,8 @@ class LinkRouterTest {
 
     @Test
     fun `redirect to foreign host stays in app — issue 172`() {
-        // Цепочка входа через SSO на отдельном домене должна продолжаться
-        // внутри окна, иначе вход разрывается.
-        assertThat(route("https://sso.corp.net/login", redirect = true))
+        assertThat(route("https://sso.corp.net/login", external = true, redirect = true))
             .isInstanceOf(LinkRouter.Decision.KeepInApp::class.java)
-    }
-
-    // --- OAuth: WebView запрещён Google с 2016 ------------------------------
-
-    @Test
-    fun `google oauth always goes to custom tab`() {
-        for (u in listOf(
-            "https://accounts.google.com/o/oauth2/auth?x=1",
-            "https://oauth2.googleapis.com/token",
-            "https://signin.google.com/x",
-        )) {
-            val d = route(u)
-            assertThat(d).isInstanceOf(LinkRouter.Decision.OpenInCustomTab::class.java)
-            assertThat((d as LinkRouter.Decision.OpenInCustomTab).reason)
-                .isEqualTo(LinkRouter.Reason.OAUTH)
-        }
-    }
-
-    @Test
-    fun `oauth wins over redirect and over external setting`() {
-        val d = LinkRouter.route(
-            "https://accounts.google.com/signin", host, externalOutside = false, isRedirect = true,
-        )
-        assertThat(d).isInstanceOf(LinkRouter.Decision.OpenInCustomTab::class.java)
     }
 
     // --- NA#177: ERR_UNKNOWN_URL_SCHEME ------------------------------------
@@ -123,8 +141,6 @@ class LinkRouterTest {
 
     @Test
     fun `url without host stays in app`() {
-        // Uri.parse("https:///page") даёт host="" — это то же самое, что
-        // «хоста нет», и такую ссылку нельзя считать чужим домном.
         assertThat(route("https:///page"))
             .isInstanceOf(LinkRouter.Decision.KeepInApp::class.java)
     }

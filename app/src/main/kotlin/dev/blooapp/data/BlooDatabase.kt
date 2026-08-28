@@ -108,6 +108,7 @@ abstract class BlooDatabase : RoomDatabase() {
                         `mixed_content_mode` TEXT NOT NULL,
                         `keep_screen_on` INTEGER NOT NULL,
                         `external_links_outside` INTEGER NOT NULL,
+                        `google_login_outside` INTEGER NOT NULL,
                         `created_at` INTEGER NOT NULL,
                         `updated_at` INTEGER NOT NULL,
                         FOREIGN KEY(`group_id`) REFERENCES `groups`(`id`)
@@ -127,6 +128,7 @@ abstract class BlooDatabase : RoomDatabase() {
                         require_gesture_for_media, pause_timers_in_background, allow_popups,
                         user_agent_mode, custom_user_agent, text_zoom_percent, force_dark,
                         mixed_content_mode, keep_screen_on, external_links_outside,
+                        google_login_outside,
                         created_at, updated_at
                     )
                     SELECT
@@ -135,7 +137,11 @@ abstract class BlooDatabase : RoomDatabase() {
                         js_enabled, dom_storage_enabled, cookies_enabled, third_party_cookies,
                         require_gesture_for_media, pause_timers_in_background, allow_popups,
                         user_agent_mode, custom_user_agent, text_zoom_percent, force_dark,
-                        mixed_content_mode, keep_screen_on, external_links_outside,
+                        mixed_content_mode, keep_screen_on,
+                        -- Дефолт меняется на 0 осознанно: открытие чужих ссылок
+                        -- в системном браузере уносило сессию из изолированного
+                        -- окна в браузер пользователя.
+                        0, 0,
                         created_at, updated_at
                     FROM `web_apps`
                     """.trimIndent()

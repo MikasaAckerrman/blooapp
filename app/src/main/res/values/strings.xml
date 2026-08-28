@@ -59,5 +59,10 @@
     <string name="storage_broken_title">База данных недоступна</string>
     <string name="storage_broken_message">Не удалось открыть список веб-приложений. Приложение запущено с пустым списком, чтобы вы могли им пользоваться. Ваши данные не удалены.</string>
 
+    <string name="external_login_title">Вход через Google</string>
+    <string name="external_login_message">Google не разрешает вход внутри приложений — только в браузере.\n\nВажно: если войти в браузере, эта сессия попадёт в браузер, а не в изолированное окно. Аккаунт будет тот, под которым вы вошли в браузере.\n\nДля отдельного аккаунта в этом окне лучше войти по логину и паролю, если сайт это позволяет.</string>
+    <string name="action_open_browser">Открыть в браузере</string>
+    <string name="action_always_open_browser">Всегда для этого окна</string>
+
     <string name="diagnostics_title">Окружение</string>
 </resources>
